@@ -230,7 +230,7 @@ The project uses GitHub Actions for CI/CD:
 
 ## 📄 License
 
-[Add your license here]
+
 
 ## 🆘 Support
 
