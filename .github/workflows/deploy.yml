@@ -1,0 +1,52 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main      # Production
+      - staging   # Staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          SKIP_ENV_VALIDATION: true
+
+      - name: Run database migrations
+        working-directory: apps/backend
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build Docker images
+        run: |
+          docker build -t ai-receptionist-backend:latest -f apps/backend/Dockerfile .
+          docker build -t ai-receptionist-frontend:latest -f apps/frontend/Dockerfile .
+
+      - name: Deploy to Minimal Machines
+        run: |
+          echo "Deploying to ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}"
+          # Minimal Machines CLI deployment
+          # mm deploy --instance ec2-${{ github.ref == 'refs/heads/main' && 'prod' || 'staging' }} --env ${{ github.ref == 'refs/heads/main' && 'prod' || 'staging' }}
+        env:
+          MM_API_KEY: ${{ secrets.MM_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+

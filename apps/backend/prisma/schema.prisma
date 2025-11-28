@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Seed script configuration
+// Run with: npx prisma db seed
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum VoiceTone {
+  friendly
+  professional
+  casual
+}
+
+enum SummaryChannel {
+  whatsapp
+  sms
+  email
+}
+
+enum CallStatus {
+  answered
+  missed
+  completed
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  phone     String?
+  createdAt DateTime @default(now())
+
+  businesses Business[]
+}
+
+model Business {
+  id            String         @id @default(cuid())
+  userId        String         // FK to User
+  clerkUserId   String         @unique // Clerk user ID for auth
+  name          String
+  phoneNumber   String?
+  email         String?
+  address       String?
+  businessType  String?        // e.g., "salon", "clinic"
+  services      Json           // Array of services: [{name, duration, price}]
+  hours         Json           // Business hours: {monday: {open, close}, ...}
+  pricing       Json?          // Optional pricing structure
+  faqs          Json           // Array of FAQs: [{question, answer}]
+  voiceTone     VoiceTone      @default(friendly)
+  summaryChannel SummaryChannel @default(whatsapp)
+  bookingRules  Json?          // {slots: [], leadTime: number, ...}
+  timezone      String         @default("UTC")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calls         Call[]
+  appointments  Appointment[]
+}
+
+model Call {
+  id              String     @id @default(cuid())
+  businessId      String
+  vapiCallId      String?    @unique  // Vapi call ID (optional for missed calls)
+  callerName      String?
+  callerPhone     String
+  timestamp       DateTime   @default(now())
+  transcript      String?    // Full transcript from Vapi (via Deepgram)
+  summary         Json?      // {intent: string, details: object, action: 'callback'|'booking'|'quote'}
+  audioUrl        String?    // S3 URL or Vapi recording URL
+  status          CallStatus @default(missed)
+  duration        Int?       // in seconds
+  direction       String     @default("inbound") // "inbound" or "outbound"
+  extractedInfo   Json?      // Structured data extracted from call
+  vapiMetadata    Json?      // Store Vapi-specific metadata
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments    Appointment[]
+}
+
+model Appointment {
+  id          String   @id @default(cuid())
+  businessId  String
+  callId      String?
+  customerName String?
+  customerPhone String
+  customerEmail String?
+  serviceType  String?
+  scheduledAt  DateTime
+  status      String   @default("pending") // "pending", "confirmed", "cancelled"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  call        Call?    @relation(fields: [callId], references: [id], onDelete: SetNull)
+}
+
